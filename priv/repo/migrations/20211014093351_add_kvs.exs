@@ -7,7 +7,6 @@ defmodule KeyValueStore.Repo.Migrations.AddKvs do
     add :value, :text
     add :type, :text
 
-    timestamps()
     end
   create unique_index(:params, [:key])
   end

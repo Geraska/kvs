@@ -1,50 +1,76 @@
 defmodule KeyValueStore do
   use Ecto.Schema
   import Ecto.Changeset
-  alias KeyValueStore.Repo
+  alias Kvs.Repo
+  import Ecto.Query, only: [from: 2]
 
   schema "params" do
     field(:key, :string)
     field(:value, :string)
     field(:type, :string)
-
-    timestamps()
   end
 
-  def changeset(param, opts \\ %{}) do
-    param
-    |> cast(opts, [:key, :type, :value])
+  def changeset(obj, params \\ %{}) do
+    obj
+    |> cast(params, [:key, :type, :value])
     |> validate_required([:key, :type, :value])
-    |> unsafe_validate_unique("params", [:key])
+    |> unsafe_validate_unique([:key], Repo)
   end
 
   def add(key, value) do
-    new_key = Atom.to_string(key)
+    new_key =
+      cond do
+        is_atom(key) -> Atom.to_string(key)
+        is_bitstring(key) -> key
+      end
 
-    cond do
-      is_integer(value) ->
-        Map.put(%{key: new_key, type: "integer"}, :value, Integer.to_string(value))
+    new_value =
+      cond do
+        is_integer(value) ->
+          Map.put(%{key: new_key, type: "integer"}, :value, Integer.to_string(value))
 
-      is_bitstring(value) ->
-        Map.put(%{key: new_key, type: "string"}, :value, value)
+        is_bitstring(value) ->
+          Map.put(%{key: new_key, type: "string"}, :value, value)
 
-      is_map(value) ->
-        Map.put(%{key: new_key, type: "map"}, :value, new_value(value))
-    end
-    |> changeset(%{})
+        is_map(value) ->
+          Map.put(%{key: new_key, type: "map"}, :value, map_to_string(value))
+      end
+
+    changeset(%__MODULE__{}, new_value)
     |> Repo.insert()
   end
 
-  def new_value(map) do
-    keys = Map.keys(map)
-    values = Map.values(map)
-    new_keys = Enum.map(keys, fn x -> Atom.to_string(x) end)
+  def map_to_string(map) do
+    Enum.reduce(map, "", fn {k, v}, acc -> acc <> to_string(k) <> ":" <> to_string(v) <> "," end)
+    |> String.replace_trailing(",", "")
+  end
 
-    new_values =
-      cond do
-        is_integer(hd(values)) -> Enum.map(values, fn x -> Integer.to_string(x) end)
-        is_bitstring(hd(values)) -> values
-      end
-      Enum.reduce()
+  def get_by_key(key) do
+    query =
+      from(
+        p in KeyValueStore,
+        where: p.key == ^key,
+        select: p
+      )
+
+    repo = Repo.one(query)
+    new_key = String.to_atom(repo.key)
+
+    case repo.type do
+      "integer" ->
+        Map.put(%{}, new_key, String.to_integer(repo.value))
+
+      "string" ->
+        Map.put(%{}, new_key, repo.value)
+
+      "map" ->
+        repo.value
+        |> String.split(",")
+        |> Enum.map(fn item -> String.split(item, ":") end)
+        |> Enum.map(fn [key, value] -> %{String.to_atom(key) => value} end)
+        |> Enum.reduce(%{}, fn x, acc ->
+          Map.put(acc, hd(Map.keys(x)), hd(Map.values(x)))
+        end)
+    end
   end
 end

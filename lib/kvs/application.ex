@@ -8,6 +8,7 @@ defmodule Kvs.Application do
   @impl true
   def start(_type, _args) do
     children = [
+      {Kvs.Repo, []}
       # Starts a worker by calling: Kvs.Worker.start_link(arg)
       # {Kvs.Worker, arg}
     ]
