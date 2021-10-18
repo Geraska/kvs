@@ -73,4 +73,12 @@ defmodule KeyValueStore do
         end)
     end
   end
+
+  def get_all do
+    from(
+      p in KeyValueStore,
+      select: p
+    )
+    |> Repo.all()
+  end
 end
